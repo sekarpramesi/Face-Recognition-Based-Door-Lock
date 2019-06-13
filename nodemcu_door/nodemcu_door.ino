@@ -8,12 +8,17 @@
 const char* ssid = "SweetPea";
 const char* password = "Kejaput31";
 
+int statTheft = 0;
+int statReceive = 0;
+int measurement = 0;
+int state =0;
+
 void setup() {
   pinMode(VIBR_PIN, INPUT);
   pinMode(RELAY_PIN , OUTPUT);
   pinMode(BUZZ_PIN , OUTPUT);
   Serial.begin(9600);
-
+  lockDoor();
   //wifi
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -24,37 +29,80 @@ void setup() {
   Serial.println("WiFi connected");
   //end wifi
 
-
-}
+  }
 
 void loop() {
-   long measurement =TP_init();
-   delay(50);
+   switch(state){
+    case 0: //normal
+      receiveMessage();
+      readVibration();
+      theftStatus();
+      debug();
+      checkParam();
+      break;
+    case 1: //theft
+      receiveMessage();
+      sendMessage("4");
+      lockDoor();
+      buzzerOn();
+      checkParam();
+      readVibration();
+      debug();
+      break;
+    case 2://open
+      buzzerOff();
+      unlockDoor();
+      debug();
+      sendMessage("3");
+      delay(5000);
+      lockDoor();
+      statTheft=0;
+      statReceive=0;
+      readVibration();
+      checkParam();
+      break;
+    default:
+      break;
+   }
+}
+
+void checkParam(){
+   if(statTheft==1 && statReceive == 0){//theft detected
+     state = 1;
+   }else if(statTheft == 1 && statReceive == 2){//reset buzzer
+     statTheft=0;
+     state = 0;
+   }//reset buzzer
+   else if(statTheft== 0 && statReceive == 1){
+     state = 2;
+   }else if(statTheft == 0 && statReceive == 0){
+     state = 0;
+   }
+}
+void debug(){
+   Serial.print("Receive Status : ");
+   Serial.println(statReceive);
+   Serial.print("Measurement : ");
    Serial.println(measurement);
-   if (measurement > 0){
-     tone(BUZZ_PIN, 1000, 500);
-     sendMessage("1");
-   }
-   else{
-     tone(BUZZ_PIN,0,0);
-   }
-
+   Serial.print("Theft Status : ");
+   Serial.println(statTheft);
+   Serial.print("State :");
+   Serial.println(state);
+   Serial.println("=====");
 }
-
-void buzzerOn(){
-  //pin, frequency,delay
-  tone(BUZ_PIN, 1000, 500);
-}
-
-void buzzerOff(){
-  tone(BUZ_PIN, 0, 0);
+void theftStatus(){
+  if(measurement > 0){
+    statTheft = 1;
+  }else{
+    statTheft = 0;
+  }
 }
 
 void sendMessage(String stat){
   String lastmessage = "";
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
-    String url = "http://common-id.com/hiority/control.php?"+stat+"&node=2&dir=W";
+    String url = "http://common-id.com/hiority/control.php?stat="+stat+"&node=2&dir=W";
     http.begin(url);
     http.addHeader("Content-Type", "text/plain");
     int httpCode = http.GET();
@@ -81,17 +129,35 @@ void receiveMessage(){
   } else {
     lastmessage = "";
   }
-  Serial.println(lastmessage);
+  //Serial.println(lastmessage);
   if (lastmessage.indexOf("1") >= 0) {
-    Serial.println("Success");
-    digitalWrite(RELAY_PIN, LOW);
+    statReceive = 1;
+    
+  }else if(lastmessage.indexOf("2") >= 0){
+    statReceive = 2; 
   }else{
-    digitalWrite(RELAY_PIN, HIGH);
+    statReceive = 0;
   }
 }
 
-long TP_init() {
+void readVibration() {
   delay(10);
-  long measurement = pulseIn(VIBR_PIN, HIGH); //wait for the pin to get HIGH and returns measurement
-  return measurement;
+  measurement = pulseIn(VIBR_PIN, HIGH);
+}
+
+void unlockDoor(){
+  digitalWrite(RELAY_PIN, LOW);
+}
+
+void lockDoor(){
+  digitalWrite(RELAY_PIN, HIGH);
+}
+
+void buzzerOn(){
+  //pin, frequency,delay
+  tone(BUZZ_PIN, 1000, 500);
+}
+
+void buzzerOff(){
+  tone(BUZZ_PIN, 0, 0);
 }
