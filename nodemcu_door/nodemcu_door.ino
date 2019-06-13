@@ -1,90 +1,44 @@
-#define STOP_PIN D8
-#define LED_PIN D7
-#define VIB_PIN D6
-#define BUZ_PIN D5
+#define RELAY_PIN D5
+#define VIBR_PIN D8
+#define BUZZ_PIN D6
 
-int state = 0;
-int val = 0;
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+
+const char* ssid = "SweetPea";
+const char* password = "Kejaput31";
+
 void setup() {
+  pinMode(VIBR_PIN, INPUT);
+  pinMode(RELAY_PIN , OUTPUT);
+  pinMode(BUZZ_PIN , OUTPUT);
   Serial.begin(9600);
-  pinMode(STOP_PIN,INPUT);
-  pinMode(LED_PIN,OUTPUT);
-  pinMode(VIB_PIN,INPUT);
-  pinMode(BUZ_PIN,OUTPUT);
+
+  //wifi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected");
+  //end wifi
+
+
 }
 
 void loop() {
-  vibration();
-  delay(100);
-  controlFunc();
-}
+   long measurement =TP_init();
+   delay(50);
+   Serial.println(measurement);
+   if (measurement > 0){
+     tone(BUZZ_PIN, 1000, 500);
+     sendMessage("1");
+   }
+   else{
+     tone(BUZZ_PIN,0,0);
+   }
 
-void controlFunc(){
-  switch(val){
-    case 0:
-      break;
-    case 1:
-      switch(state){
-        case 0:
-          state = 1;
-          break;
-        case 1:
-          break;
-        default:
-          break;
-      }
-      break;
-    case 2:
-      switch(state){
-        case 0:
-          break;
-        case 1:
-          state = 0;
-          break;
-        default:
-          break;
-      }
-      break;
-    default:
-      break;
-  }
-  Serial.print("Val : ");
-  Serial.println(val);
-  Serial.print("State : ");
-  Serial.println(state);
-  runFunc(state);
-  
-}
-
-void runFunc(int s){
-  switch(s){
-    case 0:
-      buzzerOff();
-      ledOn();
-      break;
-    case 1:
-      ledOff();
-      buzzerOn();
-      break;
-    default:
-      break;
-  }
-}
-
-void vibration(){
-  if(digitalRead(STOP_PIN)==0){
-    int value = digitalRead(VIB_PIN);
-    val = value;
-  }else{
-    val=2;
-  }
-}
-
-void ledOn(){
-  digitalWrite(LED_PIN, HIGH);
-}
-void ledOff(){
-  digitalWrite(LED_PIN, LOW);
 }
 
 void buzzerOn(){
@@ -94,4 +48,50 @@ void buzzerOn(){
 
 void buzzerOff(){
   tone(BUZ_PIN, 0, 0);
+}
+
+void sendMessage(String stat){
+  String lastmessage = "";
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    String url = "http://common-id.com/hiority/control.php?"+stat+"&node=2&dir=W";
+    http.begin(url);
+    http.addHeader("Content-Type", "text/plain");
+    int httpCode = http.GET();
+    String data = http.getString();
+    lastmessage = data;
+    http.end();
+  } else {
+    lastmessage = "";
+  }
+  Serial.println(lastmessage);
+}
+
+void receiveMessage(){
+  String lastmessage = "";
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    String url = "http://common-id.com/hiority/control.php?pole=1";
+    http.begin(url);
+    http.addHeader("Content-Type", "text/plain");
+    int httpCode = http.GET();
+    String data = http.getString();
+    lastmessage = data;
+    http.end();
+  } else {
+    lastmessage = "";
+  }
+  Serial.println(lastmessage);
+  if (lastmessage.indexOf("1") >= 0) {
+    Serial.println("Success");
+    digitalWrite(RELAY_PIN, LOW);
+  }else{
+    digitalWrite(RELAY_PIN, HIGH);
+  }
+}
+
+long TP_init() {
+  delay(10);
+  long measurement = pulseIn(VIBR_PIN, HIGH); //wait for the pin to get HIGH and returns measurement
+  return measurement;
 }
