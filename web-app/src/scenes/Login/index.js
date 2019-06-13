@@ -1,11 +1,9 @@
 import React, { Component } from "react";
 import {
-  BrowserRouter as Router,
-  Route,
-  Link,
   Redirect,
   withRouter
 } from "react-router-dom";
+import { connect } from "net";
 
 class Login extends Component {
     state = { redirectToReferrer: false };
@@ -30,4 +28,12 @@ class Login extends Component {
       );
     }
   }
-  
+
+function mapStateToProps(state){
+  return{
+    Auth : state.auth
+  };
+}
+export default connect(
+  mapStateToProps,{login}
+)(Login);
